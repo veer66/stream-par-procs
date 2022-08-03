@@ -45,7 +45,10 @@
 		 (loop for stream-element = (recv to-proc-chan)
 		       until (eq stream-element :END-OF-STREAM)
 		       do
-			  (setq state (funcall proc-fn stream-element state to-collector-chan)))
+			  (setq state (funcall proc-fn
+					       stream-element
+					       state
+					       (lambda (msg) (send to-collector-chan msg)))))
 		 (send to-collector-chan :END-OF-STREAM))))
 
 (defun wrap-collector (ctx)
@@ -56,7 +59,7 @@
 			 do 
 			    (if (eq element :END-OF-STREAM)
 				(incf finish-count)
-				(setq collect-state (funcall collect-fn element collect-state)))	  
+				(setq collect-state (funcall collect-fn element collect-state)))
 			 until (eq finish-count num-of-procs)
 			 finally (return collect-state))))))
 
@@ -123,11 +126,12 @@
 (defun basic-test-1 ()
   (with-open-file (f #p"stream-par-procs.lisp")
     (process f
-	     (lambda (elem state output-ch)
+	     (lambda (elem state send-fn)
 	       (declare (ignore state))
-	       (send output-ch (length elem)))
+	       (funcall send-fn (length elem)))
 	     :collect-fn (lambda (n sum)
 			   ;; (sleep 1)
 			   ;; (format t "~A,~A~%" n sum)
 			   (+ n sum))
-	     :init-collect-state-fn (lambda () 0))))
+	     :init-collect-state-fn (lambda () 0)
+	     :num-of-procs 8)))
