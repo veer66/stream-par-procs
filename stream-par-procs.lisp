@@ -6,8 +6,8 @@
 
 (in-package #:stream-par-procs)
 
-(defparameter *to-processor-buffer-size* 2)
-(defparameter *to-collector-buffer-size* 2)
+(defparameter *to-processor-buffer-size* 1024)
+(defparameter *to-collector-buffer-size* 128)
 
 (defun default-read-line (stream)
   (read-line stream nil :END-OF-STREAM))
@@ -56,7 +56,7 @@
 			 do 
 			    (if (eq element :END-OF-STREAM)
 				(incf finish-count)
-				(setq state (funcall collect-fn element collect-state)))	  
+				(setq collect-state (funcall collect-fn element collect-state)))	  
 			 until (eq finish-count num-of-procs)
 			 finally (return collect-state))))))
 
@@ -127,5 +127,7 @@
 	       (declare (ignore state))
 	       (send output-ch (length elem)))
 	     :collect-fn (lambda (n sum)
+			   ;; (sleep 1)
+			   ;; (format t "~A,~A~%" n sum)
 			   (+ n sum))
 	     :init-collect-state-fn (lambda () 0))))
