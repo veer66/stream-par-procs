@@ -1,7 +1,8 @@
 (defpackage #:stream-par-procs
   (:use #:cl)
   (:import-from #:bordeaux-threads :make-thread :join-thread)
-  (:import-from #:chanl :bounded-channel :send :recv))
+  (:import-from #:chanl :bounded-channel :send :recv)
+  (:export #:process #:*to-processor-buffer-size* #:*to-collector-buffer-size*))
 
 (in-package #:stream-par-procs)
 
