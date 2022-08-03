@@ -21,6 +21,7 @@
   collect-fn
   proc-states
   collect-state
+  process-end-of-stream-hook-fn
   to-processor-channels
   to-collector-channel
   wrapped-processors
@@ -40,19 +41,23 @@
 		    collect
 		    (make-instance 'bounded-channel :size *to-processor-buffer-size*))))
 
-(defun wrap-processor (proc-fn state to-proc-chan to-collector-chan)
-  (make-thread (lambda ()
-		 (loop for stream-element = (recv to-proc-chan)
-		       until (eq stream-element :END-OF-STREAM)
-		       do
-			  (setq state (funcall proc-fn
-					       stream-element
-					       state
-					       (lambda (msg) (send to-collector-chan msg)))))
-		 (send to-collector-chan :END-OF-STREAM))))
+(defun wrap-processor (ctx state to-proc-chan)
+  (with-slots (proc-fn to-collector-channel process-end-of-stream-hook-fn) ctx
+    (make-thread (lambda ()
+		   (flet ((send-fn (msg) (send to-collector-channel msg)))
+		     (loop for stream-element = (recv to-proc-chan)
+			   until (eq stream-element :END-OF-STREAM)
+			   do
+			      (setq state (funcall proc-fn
+						   stream-element
+						   state
+						   #'send-fn)))
+		     (unless (null process-end-of-stream-hook-fn)
+		       (funcall process-end-of-stream-hook-fn state #'send-fn))
+		     (send to-collector-channel :END-OF-STREAM))))))
 
 (defun wrap-collector (ctx)
-  (with-slots (collect-fn to-collector-channel to-collector-chan num-of-procs collect-state) ctx
+  (with-slots (collect-fn to-collector-channel num-of-procs collect-state) ctx
     (make-thread (lambda ()
 		   (loop with finish-count = 0
 			 for element = (recv to-collector-channel)
@@ -75,10 +80,9 @@
     (make-array num-of-procs
 		:initial-contents
 		(loop for i from 0 below num-of-procs
-		      collect (wrap-processor proc-fn
+		      collect (wrap-processor ctx
 					      (elt proc-states i)
-					      (elt to-processor-channels i)
-					      to-collector-channel)))))
+					      (elt to-processor-channels i))))))
 
 (defun init-additional-ctx (ctx)
   (with-slots (num-of-procs) ctx
@@ -108,13 +112,15 @@
 		  (init-proc-state-fn #'(lambda () nil))
 		  (init-collect-state-fn #'(lambda () nil))
 		  (num-of-procs 4)
-		  (collect-fn #'echo))
+		  (collect-fn #'echo)
+		  (process-end-of-stream-hook-fn nil))
   (let ((ctx (make-proc-info :proc-fn proc-fn
 			     :read-fn read-fn
 			     :init-proc-state-fn init-proc-state-fn
 			     :init-collect-state-fn init-collect-state-fn
 			     :num-of-procs num-of-procs
-			     :collect-fn collect-fn)))
+			     :collect-fn collect-fn
+			     :process-end-of-stream-hook-fn process-end-of-stream-hook-fn)))
     (init-additional-ctx ctx)
     (feed stream ctx)
     (loop for ch across (proc-info-to-processor-channels ctx)
@@ -134,4 +140,5 @@
 			   ;; (format t "~A,~A~%" n sum)
 			   (+ n sum))
 	     :init-collect-state-fn (lambda () 0)
+	     :process-end-of-stream-hook-fn (lambda (state send-fn) (funcall send-fn 10000))
 	     :num-of-procs 8)))
