@@ -2,6 +2,13 @@
 
 A library for parallelly processing a stream in Common Lisp
 
+## Usecase
+
+* When processing data from a stream takes too long because using one thread is the bottleneck
+* When data is too big to store in an in-memory list or vector
+* When the computer has many idle CPU cores
+* When using lparallel or bordeaux-threads with chanl directly takes too much effort
+
 ## Example
 
 ```Lisp
