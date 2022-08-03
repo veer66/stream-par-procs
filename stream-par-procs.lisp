@@ -119,7 +119,7 @@
       (join-thread p))
     (join-thread (proc-info-wrapped-collector ctx))))
 
-(defun t1 ()
+(defun basic-test-1 ()
   (with-open-file (f #p"stream-par-procs.lisp")
     (process f
 	     (lambda (elem state output-ch)
