@@ -26,13 +26,11 @@
   wrapped-collector)
 
 (defun make-proc-states (ctx)
-  (let* ((num-of-procs (proc-info-num-of-procs ctx))
-	 (init-state-fn (proc-info-init-proc-state-fn ctx))
-	 (states (make-array num-of-procs)))
-    (loop for i from 0 below num-of-procs
-	  do (setf (elt states i)
-		   (funcall init-state-fn)))
-    states))
+  (with-slots (num-of-procs init-proc-state-fn) ctx
+    (make-array num-of-procs
+		:initial-contents
+		(loop for i from 0 below num-of-procs
+		      collect (funcall init-proc-state-fn)))))
 
 (defun make-to-processor-channels (num-of-procs)
   (make-array num-of-procs
@@ -50,19 +48,16 @@
 		 (send to-collector-chan :END-OF-STREAM))))
 
 (defun wrap-collector (ctx)
-  (let ((collect-fn (proc-info-collect-fn ctx))
-	(to-collector-chan (proc-info-to-collector-channel ctx))
-	(num-of-procs (proc-info-num-of-procs ctx))
-	(state (proc-info-collect-state ctx)))
+  (with-slots (collect-fn to-collector-channel to-collector-chan num-of-procs collect-state) ctx
     (make-thread (lambda ()
 		   (loop with finish-count = 0
-			 for element = (recv to-collector-chan)
+			 for element = (recv to-collector-channel)
 			 do 
 			    (if (eq element :END-OF-STREAM)
 				(incf finish-count)
-				(setq state (funcall collect-fn element state)))	  
+				(setq state (funcall collect-fn element collect-state)))	  
 			 until (eq finish-count num-of-procs)
-			 finally (return state))))))
+			 finally (return collect-state))))))
 
 (defun echo (element state)
   (declare (ignore state))
@@ -72,26 +67,23 @@
   (make-instance 'bounded-channel :size *to-collector-buffer-size*))
 
 (defun make-wrapped-processors (ctx)
-  (let ((proc-fn (proc-info-proc-fn ctx))
-	(states (proc-info-proc-states ctx))
-	(to-processor-channels (proc-info-to-processor-channels ctx))
-	(to-collector-chan (proc-info-to-collector-channel ctx))
-	(num-of-procs (proc-info-num-of-procs ctx)))
-      (make-array num-of-procs
-		  :initial-contents
-		  (loop for i from 0 below num-of-procs
-			collect (wrap-processor proc-fn
-						(elt states i)
-						(elt to-processor-channels i)
-						to-collector-chan)))))
+  (with-slots (proc-fn proc-states to-processor-channels to-collector-channel num-of-procs) ctx
+    (make-array num-of-procs
+		:initial-contents
+		(loop for i from 0 below num-of-procs
+		      collect (wrap-processor proc-fn
+					      (elt proc-states i)
+					      (elt to-processor-channels i)
+					      to-collector-channel)))))
 
 (defun init-additional-ctx (ctx)
-  (setf (proc-info-proc-states ctx) (make-proc-states ctx))
-  (setf (proc-info-collect-state ctx) (funcall (proc-info-init-collect-state-fn ctx)))
-  (setf (proc-info-to-processor-channels ctx) (make-to-processor-channels (proc-info-num-of-procs ctx)))
-  (setf (proc-info-to-collector-channel ctx) (make-collector-channel))
-  (setf (proc-info-wrapped-processors ctx) (make-wrapped-processors ctx))
-  (setf (proc-info-wrapped-collector ctx) (wrap-collector ctx)))
+  (with-slots (num-of-procs) ctx
+    (setf (proc-info-proc-states ctx) (make-proc-states ctx))
+    (setf (proc-info-collect-state ctx) (funcall (proc-info-init-collect-state-fn ctx)))
+    (setf (proc-info-to-processor-channels ctx) (make-to-processor-channels num-of-procs))
+    (setf (proc-info-to-collector-channel ctx) (make-collector-channel))
+    (setf (proc-info-wrapped-processors ctx) (make-wrapped-processors ctx))
+    (setf (proc-info-wrapped-collector ctx) (wrap-collector ctx))))
 
 (defun dispatch (element i num-of-procs to-processor-channels)
   (let* ((proc-i (mod i num-of-procs))
