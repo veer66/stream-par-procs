@@ -27,3 +27,23 @@ A library for parallelly processing a stream in Common Lisp
 	   :init-collect-state-fn (lambda () 0)
 	   :num-of-procs 8))
 ```
+
+## API
+
+This library has only one function
+
+### process function
+
+#### Arguments
+
+* stream
+* proc-fn
+
+#### Keyword arguments
+
+* read-fn
+* init-proc-state-fn
+* init-collect-state-fn
+* num-of-procs
+* collect-fn
+* process-end-of-stream-hook-fn
