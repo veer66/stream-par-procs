@@ -11,6 +11,8 @@ A library for parallelly processing a stream in Common Lisp
 
 ## Example
 
+#### Count characters (excluding newlines)
+
 ```Lisp
 (defpackage #:example
   (:use #:cl #:stream-par-procs))
@@ -26,6 +28,45 @@ A library for parallelly processing a stream in Common Lisp
 			 (+ n sum))
 	   :init-collect-state-fn (lambda () 0)
 	   :num-of-procs 8))
+```
+
+#### Make a histogram of characters
+
+```Lisp
+(defun histo-proc (line hash-tab send-fn)
+  (declare (ignore send-fn))
+  (loop for ch across line do
+    (if #1=(gethash ch hash-tab)
+	(incf #1#)
+	(setf #1# 1)))
+  hash-tab)
+
+(defun forward (hash-tab send-fn)
+  (funcall send-fn hash-tab))
+
+(defun merge-hash-table (hash-tab-from-proc main-hash-tab)
+  (loop for k being the hash-keys of hash-tab-from-proc
+	  using (hash-value v)
+	do
+	   (let* ((v-main #2= (gethash k main-hash-tab))
+		  (v-sum (+ v (or v-main 0))))
+	     (setf #2# v-sum)))
+  main-hash-tab)
+
+
+(defun histo ()
+  (with-open-file (fi "hello.txt")
+    (stream-par-procs:process fi
+			      #'histo-proc
+			      :num-of-procs 4
+			      :init-proc-state-fn #'make-hash-table
+			      :init-collect-state-fn #'make-hash-table
+			      :process-end-of-stream-hook-fn #'forward
+			      :collect-fn #'merge-hash-table)))
+
+(loop for k being the hash-keys of (histo) 
+   using (hash-value v)
+   do (format t "~A --- ~A~%" k v))
 ```
 
 ## API
