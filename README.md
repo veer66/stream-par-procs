@@ -69,6 +69,12 @@ A library for parallelly processing a stream in Common Lisp
    do (format t "~A --- ~A~%" k v))
 ```
 
+## How to install
+
+1. Install Quicklisp if you didn't.
+2. Install Ultradist dist by (ql-dist:install-dist "http://dist.ultralisp.org/") if you didn't.
+3. In REPL, run (ql:quickload :stream-par-procs).
+
 ## API
 
 This library has only one function
