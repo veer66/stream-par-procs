@@ -45,11 +45,12 @@
   (with-slots (proc-fn to-collector-channel process-end-of-stream-hook-fn) ctx
     (make-thread (lambda ()
 		   (flet ((send-fn (msg) (send to-collector-channel msg)))
-		     (loop for stream-element = (recv to-proc-chan)
+		     (loop for (stream-element . element-i) = (recv to-proc-chan)
 			   until (eq stream-element :END-OF-STREAM)
 			   do
 			      (setq state (funcall proc-fn
 						   stream-element
+						   element-i
 						   state
 						   #'send-fn)))
 		     (unless (null process-end-of-stream-hook-fn)
@@ -96,7 +97,7 @@
 (defun dispatch (element i num-of-procs to-processor-channels)
   (let* ((proc-i (mod i num-of-procs))
 	 (ch (elt to-processor-channels proc-i)))
-    (send ch (values element i))))
+    (send ch (cons element i))))
 
 (defun feed (stream ctx)
   (let ((read-fn (proc-info-read-fn ctx))
@@ -124,7 +125,7 @@
     (init-additional-ctx ctx)
     (feed stream ctx)
     (loop for ch across (proc-info-to-processor-channels ctx)
-	  do (send ch :END-OF-STREAM))
+	  do (send ch (cons :END-OF-STREAM nil)))
     (loop for p across (proc-info-wrapped-processors ctx) do
       (join-thread p))
     (join-thread (proc-info-wrapped-collector ctx))))
@@ -132,13 +133,15 @@
 (defun basic-test-1 ()
   (with-open-file (f #p"stream-par-procs.lisp")
     (process f
-	     (lambda (elem state send-fn)
-	       (declare (ignore state))
+	     (lambda (elem elem-i state send-fn)
+	       (declare (ignore state elem-i state))
 	       (funcall send-fn (length elem)))
 	     :collect-fn (lambda (n sum)
 			   ;; (sleep 1)
 			   ;; (format t "~A,~A~%" n sum)
 			   (+ n sum))
 	     :init-collect-state-fn (lambda () 0)
-	     :process-end-of-stream-hook-fn (lambda (state send-fn) (funcall send-fn 10000))
+	     :process-end-of-stream-hook-fn (lambda (state send-fn)
+					      (declare (ignore state))
+					      (funcall send-fn 10000))
 	     :num-of-procs 8)))

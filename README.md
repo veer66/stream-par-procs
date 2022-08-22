@@ -21,20 +21,23 @@ A library for parallelly processing a stream in Common Lisp
 
 (with-open-file (f #p"hello.txt")
   (process f
-	   (lambda (elem state send-fn)
-	     (declare (ignore state))
-	     (funcall send-fn (length elem)))
-	   :collect-fn (lambda (n sum)
-			 (+ n sum))
-	   :init-collect-state-fn (lambda () 0)
-	   :num-of-procs 8))
+	     (lambda (elem elem-i state send-fn)
+	       (declare (ignore state elem-i state))
+	       (funcall send-fn (length elem)))
+	     :collect-fn (lambda (n sum)
+             		   (+ n sum))
+	     :init-collect-state-fn (lambda () 0)
+	     :process-end-of-stream-hook-fn (lambda (state send-fn)
+					      (declare (ignore state))
+					      (funcall send-fn 10000))
+	     :num-of-procs 8))
 ```
 
 #### Make a histogram of characters
 
 ```Lisp
-(defun histo-proc (line hash-tab send-fn)
-  (declare (ignore send-fn))
+(defun histo-proc (line line-no hash-tab send-fn)
+  (declare (ignore send-fn line-no))
   (loop for ch across line do
     (if #1=(gethash ch hash-tab)
 	(incf #1#)
