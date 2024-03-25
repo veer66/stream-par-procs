@@ -1,6 +1,6 @@
 # stream-par-procs
 
-A library for parallelly processing a stream in Common Lisp
+A library for parallel processing of a stream in Common Lisp
 
 ## Usecase
 
